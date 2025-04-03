@@ -1,0 +1,44 @@
+name: Workflow Name  # (Optional) Name of the workflow
+
+on:  # 🔹 Define the trigger events (when to run the workflow)
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - main
+  workflow_dispatch:  # Allows manual trigger from GitHub UI
+
+env:  # 🔹 Define global environment variables (optional)
+  JAVA_HOME: /usr/lib/jvm/java-17-openjdk-amd64
+  DOCKER_IMAGE: myapp:latest
+
+jobs:  # 🔹 Define jobs (each job runs independently unless specified)
+  build:
+    runs-on: ubuntu-latest  # OS runner
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v3  # GitHub-provided action to fetch repo code
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v3
+        with:
+          distribution: "temurin"
+          java-version: "17"
+
+      - name: Build the application
+        run: mvn clean package
+
+  test:
+    needs: build  # 🔹 This job depends on "build" (runs after it)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Run Tests
+        run: mvn test
+
+  deploy:
+    needs: test  # 🔹 This job runs after "test" (if it succeeds)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Deploy Application
+        run: echo "Deploying to Production..."
