@@ -11,11 +11,6 @@ on:
         description: 'Application Version'
         required: false
 
-# env:
-#   JAVA_HOME: /usr/lib/jvm/java-8-openjdk-amd64
-#   REGISTRY: "adamtravis/democicd"
-#   SONAR_HOST_URL: "https://sonarcloud.io"
-
 jobs:
   build:
     runs-on: ubuntu-latest
@@ -25,19 +20,20 @@ jobs:
         
       - name: Setup Java JDK
         uses: actions/setup-java@v3
-
+        with:
+            distribution: 'temurin'
       - name: Build JAR
         run: mvn clean package
-        run: mvn clean verify sonar:sonar
 
   code_coverage:
     needs: build
     runs-on: ubuntu-latest
     steps:
- #     - name: Run Jacoco Code Coverage
- #       run: mvn jacoco:report
-      - name: jacoco-reporter
-        uses: PavanMudigonda/jacoco-reporter@v5.0
+       - name: jacoco-reporter
+         uses: PavanMudigonda/jacoco-reporter@v5.0
+         with:
+            coverage_results_path: target/site/jacoco/jacoco.xml
+  
 
   sca:
     needs: build
@@ -51,52 +47,22 @@ jobs:
          url: 'https://dtrack.quobis.com'
          key: '${{ secrets.SECRET_OWASP_DT_KEY }}'
          language: 'java'
-
-    # - name: OWASP Dependency Track check
-    #   uses: Quobis/action-owasp-dependecy-track-check@v1.3
-    # URL of OWASP Dependency Track REST API
-    #  url: # default is https://dtrack.quobis.com/
-    # Key to access OWASP Dependency Track REST API default is USEAVALIDKEY
       
   sast:
     needs: build
     runs-on: ubuntu-latest
     steps:
       - name: SonarQube Scan
-        uses: SonarSource/sonarqube-scan-action@v5.0.0
         env:
-        SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
-        SONAR_HOST_URL: ${{ vars.SONAR_HOST_URL }}
-        with:
-          projectBaseDir: ./target
-          args: >
-            -Dsonar.projectKey=my-projectkey
-            -Dsonar.python.coverage.reportPaths=coverage.xml
-            -Dsonar.sources=lib/
-            -Dsonar.tests=tests/
-            -Dsonar.test.exclusions=tests/**
-            -Dsonar.verbose=true
-
-      # - name: SonarQube Scan
-      #   uses: SonarSource/sonarqube-scan-action@v2
-      #   with:
-      #     args: >
-      #       -Dsonar.projectKey=wezvatech
-      #       -Dsonar.coverage.jacoco.xmlReportPaths=target/site/jacoco/jacoco.xml
-      #       -Dsonar.dependencyCheck.jsonReportPath=target/dependency-check-report.json
-      #       -Dsonar.dependencyCheck.htmlReportPath=target/dependency-check-report.html
-      #   env:
-      #     SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
-
-  # quality_gates:
-  #   needs: sast
-  #   runs-on: ubuntu-latest
-  #   steps:
-  #     - name: SonarQube Quality Gate Check
-  #       uses: SonarSource/sonarqube-quality-gate-action@v1.1.0
-  #       with:
-  #         sonar_host_url: ${{ env.SONAR_HOST_URL }}
-  #         sonar_token: ${{ secrets.SONAR_TOKEN }}
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+        run: |
+          sonar-scanner \
+            -Dsonar.projectKey=your_project_key \
+            -Dsonar.projectName=Your Project Name \
+            -Dsonar.projectVersion=1.0 \
+            -Dsonar.sources=. \
+            -Dsonar.host.url=http://localhost:9000 \
+            -Dsonar.login=${{ secrets.SONAR_TOKEN }}
 
 # Check the Quality Gate status.
   quality_gates:
@@ -111,18 +77,6 @@ jobs:
          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
          SONAR_HOST_URL: ${{ secrets.SONAR_HOST_URL }} 
          SET_SONAR_PROJECT_STATUS: true 
-
-  # docker_build:
-  #   needs: quality_gates
-  #   runs-on: ubuntu-latest
-  #   steps:
-  #     - name: Log in to DockerHub
-  #       run: echo "${{ secrets.DOCKER_PASSWORD }}" | docker login -u "${{ secrets.DOCKER_USERNAME }}" --password-stdin
-
-  #     - name: Build & Push Docker Image
-  #       run: |
-  #         docker build -t $REGISTRY:${{ github.run_number }} .
-  #         docker push $REGISTRY:${{ github.run_number }}
 
   docker_build:
     needs: quality_gates
@@ -142,19 +96,6 @@ jobs:
         with:
           push: true
           tags: user/app:latest
-
-
-  # scan_image:
-  #   needs: docker_build
-  #   runs-on: ubuntu-latest
-  #   steps:
-  #     - name: Install Trivy
-  #       run: |
-  #         curl -sfL https://raw.githubusercontent.com/aquasecurity/trivy/main/contrib/install.sh | sh
-  #         sudo mv trivy /usr/local/bin/
-
-  #     - name: Scan Image with Trivy
-  #       run: trivy image --scanners vuln --offline-scan $REGISTRY:${{ github.run_number }} > trivyresults.txt
 
   scan_image:
     needs: docker_build
@@ -186,14 +127,3 @@ jobs:
           sleep 90
           ./check.sh
           docker rm --force smokerun
-
-  # trigger_cd:
-  #   needs: smoke_test
-  #   runs-on: ubuntu-latest
-  #   steps:
-  #     - name: Trigger CD Pipeline
-  #       run: |
-  #         curl -X POST -H "Authorization: Bearer ${{ secrets.GITLAB_ACCESS_TOKEN }}" \
-  #              -H "Content-Type: application/json" \
-  #              -d '{"token": "${{ secrets.GITLAB_TRIGGER_TOKEN }}", "ref": "main", "variables": {"IMAGETAG": "${{ github.run_number }}", "PASSWD": "${{ github.event.inputs.PASSWD }}"}}' \
-  #              "https://gitlab.com/api/v4/projects/your-gitlab-project-id/trigger/pipeline"
